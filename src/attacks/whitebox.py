@@ -10,6 +10,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import os
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 from models import *
@@ -24,13 +25,44 @@ from cleverhans.attacks import MomentumIterativeMethod
 from cleverhans.evaluation import batch_eval
 from cleverhans.utils_keras import KerasModelWrapper
 
-#from attacks.carlini_wagner_l0 import CarliniWagnerL0
+import art
+import tensorflow as tf
+from tensorflow import keras
+# from attacks.carlini_wagner_l0 import CarliniWagnerL0
 from attacks.carlini_wagner_l2 import CarliniWagnerL2
-#from attacks.carlini_wagner_li import CarliniWagnerLinf
 
+# from attacks.carlini_wagner_li import CarliniWagnerLinf
+tf.get_logger().setLevel('INFO')
+# sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+# keras.backend.set_session(sess)
+# init = tf.global_variables_initializer()
+# sess.run(init)
 # FLAGS = flags.FLAGS
 
 validation_rate = 0.2
+
+
+def generate_art(model, X, Y, attack_method, dataset, attack_params):
+    batch_size = 128
+    wrap_model = art.classifiers.KerasClassifier(model)
+    print(attack_params)
+    attacker = None
+    if attack_method == ATTACK.FGSM:
+        attacker = art.attacks.FastGradientMethod(wrap_model, eps=attack_params['eps'], norm=attack_params['ord'])
+    elif attack_method == ATTACK.PGD:
+        attacker = art.attacks.ProjectedGradientDescent(wrap_model,
+                                                        eps=attack_params['eps'],
+                                                        eps_step=attack_params['eps_iter'],
+                                                        max_iter=attack_params['nb_iter'],
+                                                        num_random_init=3)
+    else:
+        raise NotImplemented('Only FGSM & PGD using ART is implemented')
+    print('generating adversarial example...')
+    adv_x = attacker.generate(x=X)
+    adv_x = np.clip(adv_x, attack_params['clip_min'], attack_params['clip_max'])
+    score = ((model.predict(adv_x).argmax(axis=-1) == Y.argmax(axis=-1)).astype(np.int).sum()) / Y.shape[0]
+    print('*** Accuracy on adversarial examples: {}'.format(score))
+    return adv_x, Y
 
 
 def generate(sess, model, X, Y, attack_method, dataset, attack_params):
@@ -139,12 +171,11 @@ def generate(sess, model, X, Y, attack_method, dataset, attack_params):
     # define custom loss function for adversary
     compile_params = get_compile_params(dataset,
                                         get_adversarial_metric(model, attacker, attack_params))
-
+    print(compile_params)
     print('#### Recompile the model')
     model.compile(optimizer=compile_params['optimizer'],
                   loss=keras.losses.categorical_crossentropy,
                   metrics=['accuracy', compile_params['metrics']])
-
     # define the graph
     print('define the graph')
     adv_x = attacker.generate(model.input, **attack_params)
@@ -166,6 +197,8 @@ def generate(sess, model, X, Y, attack_method, dataset, attack_params):
 """
 Prepare compile parameters 
 """
+
+
 def get_compile_params(dataset=DATA.mnist, metrics=None):
     compile_params = {}
 
@@ -182,9 +215,12 @@ def get_compile_params(dataset=DATA.mnist, metrics=None):
 
     return compile_params
 
+
 """
 Define custom loss functions
 """
+
+
 def get_adversarial_metric(model, attacker, attack_params):
     print('INFO: create metrics for adversary generation.')
 

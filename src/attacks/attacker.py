@@ -9,7 +9,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import time
 import tensorflow as tf
-import tensorflow.keras as keras
+from tensorflow import keras
 
 from utils.config import *
 import attacks.whitebox as whitebox
@@ -51,7 +51,8 @@ def get_adversarial_examples(model_name, attack_method, X, Y, **kwargs):
         logger.info('{}: (eps={})'.format(attack_method.upper(), eps))
 
         start_time = time.time()
-        X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
+        X_adv, Y = whitebox.generate_art(model, X, Y, attack_method, dataset, attack_params)
+        # X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
         duration = time.time() - start_time
         logger.info('Time cost for generation: {}'.format(duration))
 
@@ -291,7 +292,8 @@ def attack_whitebox(sess, model, attack_method, X, Y, **kwargs):
         logger.info('{}: (eps={})'.format(attack_method.upper(), eps))
 
         start_time = time.time()
-        X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
+        X_adv, Y = whitebox.generate_art(model, X, Y, attack_method, dataset, attack_params)
+        # X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
         duration = time.time() - start_time
         logger.info('Time cost for generation: {}'.format(duration))
 
@@ -434,9 +436,9 @@ def attack_whitebox(sess, model, attack_method, X, Y, **kwargs):
         logger.info('Time cost: {}'.format(duration))
 
     elif (attack_method == ATTACK.PGD):
-        eps = kwargs.get('eps', 0.3)
-        nb_iter = kwargs.get('nb_iter', 40)
-        eps_iter = kwargs.get('eps_iter', 0.01)
+        eps = kwargs.get('eps', 0.1)
+        nb_iter = kwargs.get('nb_iter', 250)
+        eps_iter = kwargs.get('eps_iter', eps/nb_iter)
 
         attack_params = {
             'eps': eps,
@@ -447,7 +449,8 @@ def attack_whitebox(sess, model, attack_method, X, Y, **kwargs):
         }
 
         start_time = time.time()
-        X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
+        # X_adv, Y = whitebox.generate(sess, model, X, Y, attack_method, dataset, attack_params)
+        X_adv, Y = whitebox.generate_art(model, X, Y, attack_method, dataset, attack_params)
         duration = time.time() - start_time
         logger.info('Time cost: {}'.format(duration))
 
